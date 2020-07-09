@@ -1,312 +1,253 @@
-variable "namespace" {
+#
+# AWS ElasticSearch
+#
+variable "domain_name" {
+  description = "Name of the domain"
   type        = string
-  default     = ""
-  description = "Namespace, which could be your organization name or abbreviation, e.g. 'eg' or 'cp'"
-}
-
-variable "environment" {
-  type        = string
-  default     = ""
-  description = "Environment, e.g. 'prod', 'staging', 'dev', 'pre-prod', 'UAT'"
-}
-
-variable "stage" {
-  type        = string
-  default     = ""
-  description = "Stage, e.g. 'prod', 'staging', 'dev', OR 'source', 'build', 'test', 'deploy', 'release'"
-}
-
-variable "name" {
-  type        = string
-  default     = ""
-  description = "Solution name, e.g. 'app' or 'jenkins'"
-}
-
-variable "enabled" {
-  type        = bool
-  default     = true
-  description = "Set to false to prevent the module from creating any resources"
-}
-
-variable "delimiter" {
-  type        = string
-  default     = "-"
-  description = "Delimiter to be used between `namespace`, `environment`, `stage`, `name` and `attributes`"
-}
-
-variable "attributes" {
-  type        = list(string)
-  default     = []
-  description = "Additional attributes (e.g. `1`)"
-}
-
-variable "label_order" {
-  type        = list(string)
-  default     = []
-  description = "The naming order of the id output and Name tag"
-}
-
-variable "tags" {
-  type        = map(string)
-  default     = {}
-  description = "Additional tags (e.g. `map('BusinessUnit','XYZ')`"
-}
-
-variable "security_groups" {
-  type        = list(string)
-  default     = []
-  description = "List of security group IDs to be allowed to connect to the cluster"
-}
-
-variable "ingress_port_range_start" {
-  type        = number
-  default     = 0
-  description = "Start number for allowed port range. (e.g. `443`)"
-}
-
-variable "ingress_port_range_end" {
-  type        = number
-  default     = 65535
-  description = "End number for allowed port range. (e.g. `443`)"
-}
-
-variable "allowed_cidr_blocks" {
-  type        = list(string)
-  default     = []
-  description = "List of CIDR blocks to be allowed to connect to the cluster"
-}
-
-variable "vpc_enabled" {
-  type        = bool
-  description = "Set to false if ES should be deployed outside of VPC."
-  default     = true
-}
-
-variable "vpc_id" {
-  type        = string
-  description = "VPC ID"
-  default     = null
-}
-
-variable "subnet_ids" {
-  type        = list(string)
-  description = "VPC Subnet IDs"
-  default     = []
-}
-
-variable "dns_zone_id" {
-  type        = string
-  default     = ""
-  description = "Route53 DNS Zone ID to add hostname records for Elasticsearch domain and Kibana"
 }
 
 variable "elasticsearch_version" {
+  description = "The version of Elasticsearch to deploy."
   type        = string
-  default     = "7.4"
-  description = "Version of Elasticsearch to deploy (_e.g._ `7.4`, `7.1`, `6.8`, `6.7`, `6.5`, `6.4`, `6.3`, `6.2`, `6.0`, `5.6`, `5.5`, `5.3`, `5.1`, `2.3`, `1.5`"
+  default     = "7.1"
 }
 
-variable "instance_type" {
+variable "access_policies" {
+  description = "IAM policy document specifying the access policies for the domain"
   type        = string
-  default     = "t2.small.elasticsearch"
-  description = "Elasticsearch instance type for data nodes in the cluster"
+  default     = ""
 }
 
-variable "instance_count" {
-  type        = number
-  description = "Number of data nodes in the cluster"
-  default     = 4
+# Advanced options
+variable "advanced_options" {
+  description = "Key-value string pairs to specify advanced configuration options. Note that the values for these configuration options must be strings (wrapped in quotes) or they may be wrong and cause a perpetual diff, causing Terraform to want to recreate your Elasticsearch domain on every apply"
+  type        = map(string)
+  default     = {}
 }
 
-variable "iam_role_arns" {
-  type        = list(string)
-  default     = []
-  description = "List of IAM role ARNs to permit access to the Elasticsearch domain"
+# ebs_options
+variable "ebs_options" {
+  description = "EBS related options, may be required based on chosen instance size"
+  type        = map
+  default     = {}
 }
 
-variable "iam_authorizing_role_arns" {
-  type        = list(string)
-  default     = []
-  description = "List of IAM role ARNs to permit to assume the Elasticsearch user role"
-}
-
-variable "iam_actions" {
-  type        = list(string)
-  default     = []
-  description = "List of actions to allow for the IAM roles, _e.g._ `es:ESHttpGet`, `es:ESHttpPut`, `es:ESHttpPost`"
-}
-
-variable "zone_awareness_enabled" {
+variable "ebs_enabled" {
+  description = "Whether EBS volumes are attached to data nodes in the domain"
   type        = bool
   default     = true
-  description = "Enable zone awareness for Elasticsearch cluster"
 }
 
-variable "availability_zone_count" {
-  type        = number
-  default     = 2
-  description = "Number of Availability Zones for the domain to use."
-}
-
-variable "ebs_volume_size" {
-  type        = number
-  description = "EBS volumes for data storage in GB"
-  default     = 0
-}
-
-variable "ebs_volume_type" {
+variable "ebs_options_volume_type" {
+  description = "The type of EBS volumes attached to data nodes"
   type        = string
   default     = "gp2"
-  description = "Storage type of EBS volumes"
 }
 
-variable "ebs_iops" {
+variable "ebs_options_volume_size" {
+  description = "The size of EBS volumes attached to data nodes (in GB). Required if ebs_enabled is set to true"
+  type        = number
+  default     = 10
+}
+
+variable "ebs_options_iops" {
+  description = "The baseline input/output (I/O) performance of EBS volumes attached to data nodes. Applicable only for the Provisioned IOPS EBS volume type"
   type        = number
   default     = 0
-  description = "The baseline input/output (I/O) performance of EBS volumes attached to data nodes. Applicable only for the Provisioned IOPS EBS volume type"
+}
+
+# encrypt_at_rest
+variable "encrypt_at_rest" {
+  description = "Encrypt at rest options. Only available for certain instance types"
+  type        = map
+  default     = {}
 }
 
 variable "encrypt_at_rest_enabled" {
+  description = "Whether to enable encryption at rest"
   type        = bool
   default     = true
-  description = "Whether to enable encryption at rest"
 }
 
 variable "encrypt_at_rest_kms_key_id" {
+  description = "The KMS key id to encrypt the Elasticsearch domain with. If not specified then it defaults to using the aws/es service KMS key"
   type        = string
-  default     = ""
-  description = "The KMS key ID to encrypt the Elasticsearch domain with. If not specified, then it defaults to using the AWS/Elasticsearch service KMS key"
+  default     = "alias/aws/es"
 }
 
-variable "domain_endpoint_options_enforce_https" {
-  type        = bool
-  default     = false
-  description = "Whether or not to require HTTPS"
-}
-
-variable "domain_endpoint_options_tls_security_policy" {
-  type        = string
-  default     = "Policy-Min-TLS-1-0-2019-07"
-  description = "The name of the TLS security policy that needs to be applied to the HTTPS endpoint"
-}
-
-
-variable "log_publishing_index_enabled" {
-  type        = bool
-  default     = false
-  description = "Specifies whether log publishing option for INDEX_SLOW_LOGS is enabled or not"
-}
-
-variable "log_publishing_search_enabled" {
-  type        = bool
-  default     = false
-  description = "Specifies whether log publishing option for SEARCH_SLOW_LOGS is enabled or not"
-}
-
-variable "log_publishing_application_enabled" {
-  type        = bool
-  default     = false
-  description = "Specifies whether log publishing option for ES_APPLICATION_LOGS is enabled or not"
-}
-
-variable "log_publishing_index_cloudwatch_log_group_arn" {
-  type        = string
-  default     = ""
-  description = "ARN of the CloudWatch log group to which log for INDEX_SLOW_LOGS needs to be published"
-}
-
-variable "log_publishing_search_cloudwatch_log_group_arn" {
-  type        = string
-  default     = ""
-  description = "ARN of the CloudWatch log group to which log for SEARCH_SLOW_LOGS needs to be published"
-}
-
-variable "log_publishing_application_cloudwatch_log_group_arn" {
-  type        = string
-  default     = ""
-  description = "ARN of the CloudWatch log group to which log for ES_APPLICATION_LOGS needs to be published"
-}
-
-variable "automated_snapshot_start_hour" {
-  type        = number
-  description = "Hour at which automated snapshots are taken, in UTC"
-  default     = 0
-}
-
-variable "dedicated_master_enabled" {
-  type        = bool
-  default     = false
-  description = "Indicates whether dedicated master nodes are enabled for the cluster"
-}
-
-variable "dedicated_master_count" {
-  type        = number
-  description = "Number of dedicated master nodes in the cluster"
-  default     = 0
-}
-
-variable "dedicated_master_type" {
-  type        = string
-  default     = "t2.small.elasticsearch"
-  description = "Instance type of the dedicated master nodes in the cluster"
-}
-
-variable "advanced_options" {
-  type        = map(string)
+# node_to_node_encryption
+variable "node_to_node_encryption" {
+  description = "Node-to-node encryption options"
+  type        = map
   default     = {}
-  description = "Key-value string pairs to specify advanced configuration options"
-}
-
-variable "elasticsearch_subdomain_name" {
-  type        = string
-  default     = ""
-  description = "The name of the subdomain for Elasticsearch in the DNS zone (_e.g._ `elasticsearch`, `ui`, `ui-es`, `search-ui`)"
-}
-
-variable "kibana_subdomain_name" {
-  type        = string
-  default     = "kibana"
-  description = "The name of the subdomain for Kibana in the DNS zone (_e.g._ `kibana`, `ui`, `ui-es`, `search-ui`, `kibana.elasticsearch`)"
-}
-
-variable "create_iam_service_linked_role" {
-  type        = bool
-  default     = true
-  description = "Whether to create `AWSServiceRoleForAmazonElasticsearchService` service-linked role. Set it to `false` if you already have an ElasticSearch cluster created in the AWS account and AWSServiceRoleForAmazonElasticsearchService already exists. See https://github.com/terraform-providers/terraform-provider-aws/issues/5218 for more info"
 }
 
 variable "node_to_node_encryption_enabled" {
-  type        = bool
-  default     = false
   description = "Whether to enable node-to-node encryption"
+  type        = bool
+  default     = true
 }
 
-variable "iam_role_max_session_duration" {
+# cluster_config 
+variable "cluster_config" {
+  description = "Cluster configuration of the domain"
+  type        = map
+  default     = {}
+}
+
+variable "cluster_config_instance_type" {
+  description = "Instance type of data nodes in the cluster"
+  type        = string
+  default     = "r5.large.elasticsearch"
+}
+
+variable "cluster_config_instance_count" {
+  description = "Number of instances in the cluster"
   type        = number
-  default     = 3600
-  description = "The maximum session duration (in seconds) for the user role. Can have a value from 1 hour to 12 hours"
+  default     = 3
 }
 
-variable "cognito_authentication_enabled" {
+variable "cluster_config_dedicated_master_enabled" {
+  description = "Indicates whether dedicated master nodes are enabled for the cluster"
+  type        = bool
+  default     = true
+}
+
+variable "cluster_config_dedicated_master_type" {
+  description = "Instance type of the dedicated master nodes in the cluster"
+  type        = string
+  default     = "r5.large.elasticsearch"
+}
+
+variable "cluster_config_dedicated_master_count" {
+  description = "Number of dedicated master nodes in the cluster"
+  type        = number
+  default     = 3
+}
+
+variable "cluster_config_availability_zone_count" {
+  description = "Number of Availability Zones for the domain to use with"
+  type        = number
+  default     = 3
+}
+
+variable "cluster_config_zone_awareness_enabled" {
+  description = "Indicates whether zone awareness is enabled. To enable awareness with three Availability Zones"
   type        = bool
   default     = false
-  description = "Whether to enable Amazon Cognito authentication with Kibana"
 }
 
-variable "cognito_user_pool_id" {
-  type        = string
-  default     = ""
-  description = "The ID of the Cognito User Pool to use"
+# snapshot_options
+variable "snapshot_options" {
+  description = "Snapshot related options"
+  type        = map
+  default     = {}
 }
 
-variable "cognito_identity_pool_id" {
-  type        = string
-  default     = ""
-  description = "The ID of the Cognito Identity Pool to use"
+variable "snapshot_options_automated_snapshot_start_hour" {
+  description = "Hour during which the service takes an automated daily snapshot of the indices in the domain"
+  type        = number
+  default     = 0
 }
 
-variable "cognito_iam_role_arn" {
+# vpc_options
+variable "vpc_options" {
+  description = "VPC related options, see below. Adding or removing this configuration forces a new resource"
+  type        = map
+  default     = {}
+}
+
+variable "vpc_options_security_group_ids" {
+  description = "List of VPC Security Group IDs to be applied to the Elasticsearch domain endpoints. If omitted, the default Security Group for the VPC will be used"
+  type        = list
+  default     = []
+}
+
+variable "vpc_options_subnet_ids" {
+  description = "List of VPC Subnet IDs for the Elasticsearch domain endpoints to be created in"
+  type        = list
+  default     = []
+}
+
+# log_publishing_options 
+variable "log_publishing_options" {
+  description = "Options for publishing slow logs to CloudWatch Logs"
+  type        = map
+  default     = {}
+}
+
+variable "log_publishing_options_log_type" {
+  description = "A type of Elasticsearch log. Valid values: INDEX_SLOW_LOGS, SEARCH_SLOW_LOGS, ES_APPLICATION_LOGS"
+  type        = string
+  default     = "INDEX_SLOW_LOGS"
+}
+
+variable "log_publishing_options_cloudwatch_log_group_arn" {
+  description = "iARN of the Cloudwatch log group to which log needs to be published"
   type        = string
   default     = ""
+}
+
+variable "log_publishing_options_enabled" {
+  description = "Specifies whether given log publishing option is enabled or not"
+  type        = bool
+  default     = true
+}
+
+# cognito_options  
+variable "cognito_options" {
+  description = "Options for Amazon Cognito Authentication for Kibana"
+  type        = map
+  default     = {}
+}
+
+variable "cognito_options_enabled" {
+  description = "Specifies whether Amazon Cognito authentication with Kibana is enabled or not"
+  type        = bool
+  default     = false
+}
+
+variable "cognito_options_user_pool_id" {
+  description = "ID of the Cognito User Pool to use"
+  type        = string
+  default     = ""
+}
+
+variable "cognito_options_identity_pool_id" {
+  description = "ID of the Cognito Identity Pool to use"
+  type        = string
+  default     = ""
+}
+
+variable "cognito_options_role_arn" {
   description = "ARN of the IAM role that has the AmazonESCognitoAccess policy attached"
+  type        = string
+  default     = ""
+}
+
+variable "tags" {
+  description = "A mapping of tags to assign to the resource"
+  type        = map
+  default     = {}
+}
+
+
+# Timeouts
+variable "timeouts" {
+  description = "Timeouts map."
+  type        = map
+  default     = {}
+}
+
+variable "timeouts_update" {
+  description = "How long to wait for updates."
+  type        = string
+  default     = null
+}
+
+# Service Link Role
+variable "create_service_link_role" {
+  description = "Create service link role for AWS Elasticsearch Service"
+  type        = bool
+  default     = true
 }

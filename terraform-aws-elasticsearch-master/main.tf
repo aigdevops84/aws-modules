@@ -1,263 +1,211 @@
-module "label" {
-  source      = "git::https://github.com/cloudposse/terraform-null-label.git?ref=tags/0.16.0"
-  enabled     = var.enabled
-  namespace   = var.namespace
-  name        = var.name
-  stage       = var.stage
-  environment = var.environment
-  delimiter   = var.delimiter
-  attributes  = var.attributes
-  label_order = var.label_order
-  tags        = var.tags
-}
+resource "aws_elasticsearch_domain" "es_domain" {
+  # Domain name
+  domain_name = var.domain_name
 
-module "user_label" {
-  source      = "git::https://github.com/cloudposse/terraform-null-label.git?ref=tags/0.16.0"
-  enabled     = var.enabled
-  namespace   = var.namespace
-  name        = var.name
-  stage       = var.stage
-  environment = var.environment
-  delimiter   = var.delimiter
-  attributes  = concat(var.attributes, ["user"])
-  label_order = var.label_order
-  tags        = var.tags
-}
-
-resource "aws_security_group" "default" {
-  count       = var.enabled && var.vpc_enabled ? 1 : 0
-  vpc_id      = var.vpc_id
-  name        = module.label.id
-  description = "Allow inbound traffic from Security Groups and CIDRs. Allow all outbound traffic"
-  tags        = module.label.tags
-}
-
-resource "aws_security_group_rule" "ingress_security_groups" {
-  count                    = var.enabled && var.vpc_enabled ? length(var.security_groups) : 0
-  description              = "Allow inbound traffic from Security Groups"
-  type                     = "ingress"
-  from_port                = var.ingress_port_range_start
-  to_port                  = var.ingress_port_range_end
-  protocol                 = "tcp"
-  source_security_group_id = var.security_groups[count.index]
-  security_group_id        = join("", aws_security_group.default.*.id)
-}
-
-resource "aws_security_group_rule" "ingress_cidr_blocks" {
-  count             = var.enabled && var.vpc_enabled && length(var.allowed_cidr_blocks) > 0 ? 1 : 0
-  description       = "Allow inbound traffic from CIDR blocks"
-  type              = "ingress"
-  from_port         = var.ingress_port_range_start
-  to_port           = var.ingress_port_range_end
-  protocol          = "tcp"
-  cidr_blocks       = var.allowed_cidr_blocks
-  security_group_id = join("", aws_security_group.default.*.id)
-}
-
-resource "aws_security_group_rule" "egress" {
-  count             = var.enabled && var.vpc_enabled ? 1 : 0
-  description       = "Allow all egress traffic"
-  type              = "egress"
-  from_port         = 0
-  to_port           = 65535
-  protocol          = "tcp"
-  cidr_blocks       = ["0.0.0.0/0"]
-  security_group_id = join("", aws_security_group.default.*.id)
-}
-
-# https://github.com/terraform-providers/terraform-provider-aws/issues/5218
-resource "aws_iam_service_linked_role" "default" {
-  count            = var.enabled && var.create_iam_service_linked_role ? 1 : 0
-  aws_service_name = "es.amazonaws.com"
-  description      = "AWSServiceRoleForAmazonElasticsearchService Service-Linked Role"
-}
-
-# Role that pods can assume for access to elasticsearch and kibana
-resource "aws_iam_role" "elasticsearch_user" {
-  count              = var.enabled && (length(var.iam_authorizing_role_arns) > 0 || length(var.iam_role_arns) > 0) ? 1 : 0
-  name               = module.user_label.id
-  assume_role_policy = join("", data.aws_iam_policy_document.assume_role.*.json)
-  description        = "IAM Role to assume to access the Elasticsearch ${module.label.id} cluster"
-  tags               = module.user_label.tags
-
-  max_session_duration = var.iam_role_max_session_duration
-}
-
-data "aws_iam_policy_document" "assume_role" {
-  count = var.enabled && (length(var.iam_authorizing_role_arns) > 0 || length(var.iam_role_arns) > 0) ? 1 : 0
-
-  statement {
-    actions = [
-      "sts:AssumeRole"
-    ]
-
-    principals {
-      type        = "Service"
-      identifiers = ["ec2.amazonaws.com"]
-    }
-
-    principals {
-      type        = "AWS"
-      identifiers = compact(concat(var.iam_authorizing_role_arns, var.iam_role_arns))
-    }
-
-    effect = "Allow"
-  }
-}
-
-# inspired by https://github.com/hashicorp/terraform/issues/20692
-# I use 0.12 new "dynamic" block - https://www.terraform.io/docs/configuration/expressions.html
-# If we have 1 az - the count of this resource equals 0, hence no config
-# block appears in the `aws_elasticsearch_domain`
-# If we have more than 1 - we set the trigger to the actual value of
-# `availability_zone_count`
-# and `dynamic` block kicks in
-resource "null_resource" "azs" {
-  count = var.availability_zone_count > 1 ? 1 : 0
-  triggers = {
-    availability_zone_count = var.availability_zone_count
-  }
-}
-
-resource "aws_elasticsearch_domain" "default" {
-  count                 = var.enabled ? 1 : 0
-  domain_name           = module.label.id
+  # ElasticSeach version
   elasticsearch_version = var.elasticsearch_version
 
-  advanced_options = var.advanced_options
+  # access_policies
+  access_policies = var.access_policies
 
-  ebs_options {
-    ebs_enabled = var.ebs_volume_size > 0 ? true : false
-    volume_size = var.ebs_volume_size
-    volume_type = var.ebs_volume_type
-    iops        = var.ebs_iops
-  }
+  # advanced_options
+  advanced_options = var.advanced_options == null ? {} : var.advanced_options
 
-  encrypt_at_rest {
-    enabled    = var.encrypt_at_rest_enabled
-    kms_key_id = var.encrypt_at_rest_kms_key_id
-  }
-
-  domain_endpoint_options {
-    enforce_https       = var.domain_endpoint_options_enforce_https
-    tls_security_policy = var.domain_endpoint_options_tls_security_policy
-  }
-
-  cluster_config {
-    instance_count           = var.instance_count
-    instance_type            = var.instance_type
-    dedicated_master_enabled = var.dedicated_master_enabled
-    dedicated_master_count   = var.dedicated_master_count
-    dedicated_master_type    = var.dedicated_master_type
-    zone_awareness_enabled   = var.zone_awareness_enabled
-
-    dynamic "zone_awareness_config" {
-      for_each = null_resource.azs[*].triggers
-      content {
-        availability_zone_count = zone_awareness_config.value.availability_zone_count
-      }
-    }
-  }
-
-  node_to_node_encryption {
-    enabled = var.node_to_node_encryption_enabled
-  }
-
-  dynamic "vpc_options" {
-    for_each = var.vpc_enabled ? [true] : []
-
+  # ebs_options
+  dynamic "ebs_options" {
+    for_each = local.ebs_options
     content {
-      security_group_ids = [join("", aws_security_group.default.*.id)]
-      subnet_ids         = var.subnet_ids
+      ebs_enabled = lookup(ebs_options.value, "ebs_enabled")
+      volume_type = lookup(ebs_options.value, "volume_type")
+      volume_size = lookup(ebs_options.value, "volume_size")
+      iops        = lookup(ebs_options.value, "iops")
     }
   }
 
-  snapshot_options {
-    automated_snapshot_start_hour = var.automated_snapshot_start_hour
-  }
-
-  cognito_options {
-    enabled          = var.cognito_authentication_enabled
-    user_pool_id     = var.cognito_user_pool_id
-    identity_pool_id = var.cognito_identity_pool_id
-    role_arn         = var.cognito_iam_role_arn
-  }
-
-  log_publishing_options {
-    enabled                  = var.log_publishing_index_enabled
-    log_type                 = "INDEX_SLOW_LOGS"
-    cloudwatch_log_group_arn = var.log_publishing_index_cloudwatch_log_group_arn
-  }
-
-  log_publishing_options {
-    enabled                  = var.log_publishing_search_enabled
-    log_type                 = "SEARCH_SLOW_LOGS"
-    cloudwatch_log_group_arn = var.log_publishing_search_cloudwatch_log_group_arn
-  }
-
-  log_publishing_options {
-    enabled                  = var.log_publishing_application_enabled
-    log_type                 = "ES_APPLICATION_LOGS"
-    cloudwatch_log_group_arn = var.log_publishing_application_cloudwatch_log_group_arn
-  }
-
-  tags = module.label.tags
-
-  depends_on = [aws_iam_service_linked_role.default]
-}
-
-data "aws_iam_policy_document" "default" {
-  count = var.enabled && (length(var.iam_authorizing_role_arns) > 0 || length(var.iam_role_arns) > 0) ? 1 : 0
-
-  statement {
-    actions = distinct(compact(var.iam_actions))
-
-    resources = [
-      join("", aws_elasticsearch_domain.default.*.arn),
-      "${join("", aws_elasticsearch_domain.default.*.arn)}/*"
-    ]
-
-    principals {
-      type        = "AWS"
-      identifiers = distinct(compact(concat(var.iam_role_arns, aws_iam_role.elasticsearch_user.*.arn)))
+  # encrypt_at_rest
+  dynamic "encrypt_at_rest" {
+    for_each = local.encrypt_at_rest
+    content {
+      enabled    = lookup(encrypt_at_rest.value, "enabled")
+      kms_key_id = lookup(encrypt_at_rest.value, "kms_key_id")
     }
+  }
 
-    # This condition is for non VPC ES to allow anonymous access from whitelisted IP ranges without requests signing
-    # https://docs.aws.amazon.com/elasticsearch-service/latest/developerguide/es-ac.html#es-ac-types-ip
-    # https://aws.amazon.com/premiumsupport/knowledge-center/anonymous-not-authorized-elasticsearch/
-    dynamic "condition" {
-      for_each = ! var.vpc_enabled && length(var.allowed_cidr_blocks) > 0 ? [true] : []
+  # node_to_node_encryption
+  dynamic "node_to_node_encryption" {
+    for_each = local.node_to_node_encryption
+    content {
+      enabled = lookup(node_to_node_encryption.value, "enabled")
+    }
+  }
 
-      content {
-        test     = "IpAddress"
-        values   = var.allowed_cidr_blocks
-        variable = "aws:SourceIp"
+  # cluster_config
+  dynamic "cluster_config" {
+    for_each = local.cluster_config
+    content {
+      instance_type            = lookup(cluster_config.value, "instance_type")
+      instance_count           = lookup(cluster_config.value, "instance_count")
+      dedicated_master_enabled = lookup(cluster_config.value, "dedicated_master_enabled")
+      dedicated_master_type    = lookup(cluster_config.value, "dedicated_master_type")
+      dedicated_master_count   = lookup(cluster_config.value, "dedicated_master_count")
+      zone_awareness_enabled   = lookup(cluster_config.value, "zone_awareness_enabled")
+
+      dynamic "zone_awareness_config" {
+        # cluster_availability_zone_count valid values: 2 or 3.
+        for_each = lookup(cluster_config.value, "zone_awareness_enabled", "false") == "false" || ! contains(["2", "3"], lookup(cluster_config.value, "availability_zone_count", "1")) ? [] : [1]
+        content {
+          availability_zone_count = lookup(cluster_config.value, "availability_zone_count")
+        }
       }
     }
-
   }
+
+  # snapshot_options
+  dynamic "snapshot_options" {
+    for_each = local.snapshot_options
+    content {
+      automated_snapshot_start_hour = lookup(snapshot_options.value, "automated_snapshot_start_hour")
+    }
+  }
+
+  # vpc_options
+  dynamic "vpc_options" {
+    for_each = local.vpc_options
+    content {
+      security_group_ids = lookup(vpc_options.value, "security_group_ids")
+      subnet_ids         = lookup(vpc_options.value, "subnet_ids")
+    }
+  }
+
+  # log_publishing_options
+  dynamic "log_publishing_options" {
+    for_each = local.log_publishing_options
+    content {
+      log_type                 = lookup(log_publishing_options.value, "log_type")
+      cloudwatch_log_group_arn = lookup(log_publishing_options.value, "cloudwatch_log_group_arn")
+      enabled                  = lookup(log_publishing_options.value, "enabled")
+    }
+  }
+
+  # cognito_options
+  dynamic "cognito_options" {
+    for_each = local.cognito_options
+    content {
+      enabled          = lookup(cognito_options.value, "enabled")
+      user_pool_id     = lookup(cognito_options.value, "user_pool_id")
+      identity_pool_id = lookup(cognito_options.value, "identity_pool_id")
+      role_arn         = lookup(cognito_options.value, "role_arn")
+    }
+  }
+
+  # Timeouts
+  dynamic "timeouts" {
+    for_each = local.timeouts
+    content {
+      update = lookup(timeouts.value, "update")
+    }
+  }
+
+  # Tags
+  tags = var.tags
+
+  # Service-linked role to give Amazon ES permissions to access your VPC
+  depends_on = [
+    aws_iam_service_linked_role.es,
+  ]
+
 }
 
-resource "aws_elasticsearch_domain_policy" "default" {
-  count           = var.enabled && (length(var.iam_authorizing_role_arns) > 0 || length(var.iam_role_arns) > 0) ? 1 : 0
-  domain_name     = module.label.id
-  access_policies = join("", data.aws_iam_policy_document.default.*.json)
-}
+locals {
 
-module "domain_hostname" {
-  source  = "git::https://github.com/cloudposse/terraform-aws-route53-cluster-hostname.git?ref=tags/0.3.0"
-  enabled = var.enabled && var.dns_zone_id != "" ? true : false
-  name    = var.elasticsearch_subdomain_name == "" ? var.name : var.elasticsearch_subdomain_name
-  ttl     = 60
-  zone_id = var.dns_zone_id
-  records = [join("", aws_elasticsearch_domain.default.*.endpoint)]
-}
+  # ebs_options
+  # If no ebs_options is provided, build a ebs_options using the default values
+  ebs_option_default = {
+    ebs_enabled = lookup(var.ebs_options, "ebs_enabled", null) == null ? var.ebs_enabled : lookup(var.ebs_options, "ebs_enabled")
+    volume_type = lookup(var.ebs_options, "volume_type", null) == null ? var.ebs_options_volume_type : lookup(var.ebs_options, "volume_type")
+    volume_size = lookup(var.ebs_options, "volume_size", null) == null ? var.ebs_options_volume_size : lookup(var.ebs_options, "volume_size")
+    iops        = lookup(var.ebs_options, "iops", null) == null ? var.ebs_options_iops : lookup(var.ebs_options, "iops")
+  }
 
-module "kibana_hostname" {
-  source  = "git::https://github.com/cloudposse/terraform-aws-route53-cluster-hostname.git?ref=tags/0.3.0"
-  enabled = var.enabled && var.dns_zone_id != "" ? true : false
-  name    = var.kibana_subdomain_name
-  ttl     = 60
-  zone_id = var.dns_zone_id
-  records = [join("", aws_elasticsearch_domain.default.*.endpoint)]
+  ebs_options = var.ebs_enabled == false || lookup(local.ebs_option_default, "ebs_enabled", "false") == "false" ? [] : [local.ebs_option_default]
+
+  # encrypt_at_rest
+  # If no encrypt_at_rest list is provided, build a encrypt_at_rest using the default values
+
+  encrypt_at_rest_default = {
+    enabled    = lookup(var.encrypt_at_rest, "enabled", null) == null ? var.encrypt_at_rest_enabled : lookup(var.encrypt_at_rest, "enabled")
+    kms_key_id = lookup(var.encrypt_at_rest, "kms_key_id", null) == null ? data.aws_kms_key.aws_es.arn : lookup(var.encrypt_at_rest, "kms_key_id")
+  }
+
+  encrypt_at_rest = var.encrypt_at_rest_enabled == false || lookup(local.encrypt_at_rest_default, "enabled", "false") == "false" ? [] : [local.encrypt_at_rest_default]
+
+  # node_to_node_encryption
+  # If no node_to_node_encryption list is provided, build a node_to_node_encryption using the default values
+  node_to_node_encryption_default = {
+    enabled = lookup(var.node_to_node_encryption, "enabled", null) == null ? var.node_to_node_encryption_enabled : lookup(var.node_to_node_encryption, "enabled")
+  }
+
+  node_to_node_encryption = var.node_to_node_encryption_enabled == false || lookup(local.node_to_node_encryption_default, "enabled", "false") == "false" ? [] : [local.node_to_node_encryption_default]
+
+  # cluster_config
+  # If no cluster_config list is provided, build a cluster_config using the default values
+  cluster_config_default = {
+    instance_type            = lookup(var.cluster_config, "instance_type", null) == null ? var.cluster_config_instance_type : lookup(var.cluster_config, "instance_type")
+    instance_count           = lookup(var.cluster_config, "instance_count", null) == null ? var.cluster_config_instance_count : lookup(var.cluster_config, "instance_count")
+    dedicated_master_enabled = lookup(var.cluster_config, "dedicated_master_enabled", null) == null ? var.cluster_config_dedicated_master_enabled : lookup(var.cluster_config, "dedicated_master_enabled")
+    dedicated_master_type    = lookup(var.cluster_config, "dedicated_master_type", null) == null ? var.cluster_config_dedicated_master_type : lookup(var.cluster_config, "dedicated_master_enabled")
+    dedicated_master_count   = lookup(var.cluster_config, "dedicated_master_count", null) == null ? var.cluster_config_dedicated_master_count : lookup(var.cluster_config, "dedicated_master_count")
+    zone_awareness_enabled   = lookup(var.cluster_config, "zone_awareness_enabled", null) == null ? var.cluster_config_zone_awareness_enabled : lookup(var.cluster_config, "zone_awareness_enabled")
+    availability_zone_count  = lookup(var.cluster_config, "availability_zone_count", null) == null ? var.cluster_config_availability_zone_count : lookup(var.cluster_config, "availability_zone_count")
+  }
+
+  cluster_config = [local.cluster_config_default]
+
+  # snapshot_options
+  # If no snapshot_options list is provided, build a snapshot_options using the default values
+  snapshot_options_default = {
+    automated_snapshot_start_hour = lookup(var.snapshot_options, "automated_snapshot_start_hour", null) == null ? var.snapshot_options_automated_snapshot_start_hour : lookup(var.snapshot_options, "automated_snapshot_start_hour")
+  }
+
+  snapshot_options = [local.snapshot_options_default]
+
+  # vpc_options
+  # If no vpc_options list is provided, build a vpc_options using the default values
+  vpc_options_default = {
+    security_group_ids = lookup(var.vpc_options, "security_group_ids", null) == null ? var.vpc_options_security_group_ids : lookup(var.vpc_options, "security_group_ids")
+    subnet_ids         = lookup(var.vpc_options, "subnet_ids", null) == null ? var.vpc_options_subnet_ids : lookup(var.vpc_options, "subnet_ids")
+  }
+
+  vpc_options = length(lookup(local.vpc_options_default, "subnet_ids")) == 0 ? [] : [local.vpc_options_default]
+
+  # log_publishing_options
+  # If no log_publishing_options list is provided, build a log_publishing_options using the default values
+  log_publishing_options_default = {
+    log_type                 = lookup(var.log_publishing_options, "log_type", null) == null ? var.log_publishing_options_log_type : lookup(var.log_publishing_options, "log_type")
+    cloudwatch_log_group_arn = lookup(var.log_publishing_options, "cloudwatch_log_group_arn", null) == null ? (var.log_publishing_options_cloudwatch_log_group_arn == "" ? aws_cloudwatch_log_group.es_cloudwatch_log_group.arn : var.log_publishing_options_cloudwatch_log_group_arn) : lookup(var.log_publishing_options, "cloudwatch_log_group_arn")
+    enabled                  = lookup(var.log_publishing_options, "enabled", null) == null ? var.log_publishing_options_enabled : lookup(var.log_publishing_options, "enabled")
+  }
+
+  log_publishing_options = var.log_publishing_options_enabled == false || lookup(local.log_publishing_options_default, "enabled") == "false" ? [] : [local.log_publishing_options_default]
+
+  # cognito_options
+  # If no cognito_options list is provided, build a cognito_options using the default values
+  cognito_options_default = {
+    enabled          = lookup(var.cognito_options, "enabled", null) == null ? var.cognito_options_enabled : lookup(var.cognito_options, "enabled")
+    user_pool_id     = lookup(var.cognito_options, "user_pool_id", null) == null ? var.cognito_options_user_pool_id : lookup(var.cognito_options, "user_pool_id")
+    identity_pool_id = lookup(var.cognito_options, "identity_pool_id", null) == null ? var.cognito_options_identity_pool_id : lookup(var.cognito_options, "identity_pool_id")
+    role_arn         = lookup(var.cognito_options, "role_arn", null) == null ? var.cognito_options_role_arn : lookup(var.cognito_options, "role_arn")
+  }
+
+  cognito_options = var.cognito_options_enabled == false || lookup(local.cognito_options_default, "enabled", "false") == "false" ? [] : [local.cognito_options_default]
+
+  # Timeouts
+  # If timeouts block is provided, build one using the default values
+  timeouts = var.timeouts_update == null && length(var.timeouts) == 0 ? [] : [
+    {
+      update = lookup(var.timeouts, "update", null) == null ? var.timeouts_update : lookup(var.timeouts, "update")
+    }
+  ]
+
+
 }

@@ -1,49 +1,30 @@
-output "security_group_id" {
-  value       = join("", aws_security_group.default.*.id)
-  description = "Security Group ID to control access to the Elasticsearch domain"
-}
-
-output "domain_arn" {
-  value       = join("", aws_elasticsearch_domain.default.*.arn)
-  description = "ARN of the Elasticsearch domain"
+output "arn" {
+  description = "Amazon Resource Name (ARN) of the domain"
+  value       = aws_elasticsearch_domain.es_domain.arn
 }
 
 output "domain_id" {
-  value       = join("", aws_elasticsearch_domain.default.*.domain_id)
-  description = "Unique identifier for the Elasticsearch domain"
+  description = "Unique identifier for the domain"
+  value       = aws_elasticsearch_domain.es_domain.domain_id
 }
 
-output "domain_name" {
-  value       = join("", aws_elasticsearch_domain.default.*.domain_name)
-  description = "Name of the Elasticsearch domain"
-}
-
-output "domain_endpoint" {
-  value       = join("", aws_elasticsearch_domain.default.*.endpoint)
+output "endpoint" {
   description = "Domain-specific endpoint used to submit index, search, and data upload requests"
+  value       = aws_elasticsearch_domain.es_domain.endpoint
 }
 
 output "kibana_endpoint" {
-  value       = join("", aws_elasticsearch_domain.default.*.kibana_endpoint)
-  description = "Domain-specific endpoint for Kibana without https scheme"
+  description = "Domain-specific endpoint for kibana without https scheme"
+  value       = aws_elasticsearch_domain.es_domain.kibana_endpoint
 }
 
-output "domain_hostname" {
-  value       = module.domain_hostname.hostname
-  description = "Elasticsearch domain hostname to submit index, search, and data upload requests"
+output "vpc_options_availability_zones" {
+  description = "If the domain was created inside a VPC, the names of the availability zones the configured subnet_ids were created inside"
+  value       = length(aws_elasticsearch_domain.es_domain.vpc_options) > 0 ? aws_elasticsearch_domain.es_domain.vpc_options.0.availability_zones : []
 }
 
-output "kibana_hostname" {
-  value       = module.kibana_hostname.hostname
-  description = "Kibana hostname"
+output "vpc_options_vpc_id" {
+  description = " If the domain was created inside a VPC, the ID of the VPC"
+  value       = length(aws_elasticsearch_domain.es_domain.vpc_options) > 0 ? aws_elasticsearch_domain.es_domain.vpc_options.0.vpc_id : ""
 }
 
-output "elasticsearch_user_iam_role_name" {
-  value       = join(",", aws_iam_role.elasticsearch_user.*.name)
-  description = "The name of the IAM role to allow access to Elasticsearch cluster"
-}
-
-output "elasticsearch_user_iam_role_arn" {
-  value       = join(",", aws_iam_role.elasticsearch_user.*.arn)
-  description = "The ARN of the IAM role to allow access to Elasticsearch cluster"
-}
